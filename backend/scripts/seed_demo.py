@@ -15,14 +15,16 @@ def seed():
         for code,name,process,scale,seed_value in [("ZH-A","常规封装批","常规硅胶封装",900.,73),("ZH-B","改进封装批","低应力复合封装",1200.,74)]:
             c=db.query(TestCohort).filter_by(code=code).first()
             if not c:
-                c=TestCohort(code=code,name=name,process=process,description="独立灯带试件恒定环境耐久观察；右删失表示观察截止仍工作，不能当作失效。")
+                c=TestCohort(code=code,name=name,process=process,description="灯带试件按来源卷分组，同卷共用卷级缺陷；右删失表示观察截止仍工作，不能当作失效。")
                 db.add(c);db.flush()
             rng=random.Random(seed_value)
-            for i in range(1,181):
-                key=f"{code}-{i:04}";lifetime=rng.weibullvariate(scale,1.8);censor=rng.uniform(900,1450);observed=lifetime<=censor;duration=max(25.,round(min(lifetime,censor)/25)*25.)
-                s=db.query(Specimen).filter_by(code=key).first()
-                if not s:s=Specimen(code=key,cohort_id=c.id,material="24V展陈柔性灯带 · 500mm",enrolled_at="2026-08-01T00:00:00+00:00");db.add(s);db.flush()
-                if not db.query(FollowupEvent).filter_by(specimen_id=s.id).first():db.add(FollowupEvent(specimen_id=s.id,duration_hours=duration,event_observed=observed,note="观察到光通量降至阈值，记为耐久事件。" if observed else "试验观察截止，灯带仍工作，记为右删失。"))
+            for r in range(1,16):
+                roll=f"{code}-R{r:02}";factor=rng.lognormvariate(0,.3)
+                for j in range(1,13):
+                    i=(r-1)*12+j;key=f"{code}-{i:04}";lifetime=rng.weibullvariate(scale,1.8)*factor;censor=rng.uniform(900,1450);observed=lifetime<=censor;duration=max(25.,round(min(lifetime,censor)/25)*25.)
+                    s=db.query(Specimen).filter_by(code=key).first()
+                    if not s:s=Specimen(code=key,cohort_id=c.id,roll_no=roll,material="24V展陈柔性灯带 · 500mm",enrolled_at="2026-08-01T00:00:00+00:00");db.add(s);db.flush()
+                    if not db.query(FollowupEvent).filter_by(specimen_id=s.id).first():db.add(FollowupEvent(specimen_id=s.id,duration_hours=duration,event_observed=observed,note="观察到光通量降至阈值，记为耐久事件。" if observed else "试验观察截止，灯带仍工作，记为右删失。"))
             db.flush();cohorts.append(c)
         if not db.query(SurvivalRun).filter_by(name="两批封装耐久 · 基准比较").first():
             a,b=cohorts;result=analyze_survival(a,b,specimen_rows(db,a.id),specimen_rows(db,b.id),.95)

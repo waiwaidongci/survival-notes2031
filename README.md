@@ -1,6 +1,6 @@
 # 纸鹤展陈耐久研究簿 · SURVIVAL NOTES
 
-分开灯带试件的失效事件与右删失，用 Kaplan–Meier 曲线、Greenwood区间和log-rank比较支持维护观察建议。
+分开灯带试件的失效事件与右删失，用 Kaplan–Meier 曲线、Greenwood区间、整卷重抽样和log-rank比较支持维护观察建议。
 
 ## 模拟场景
 
@@ -31,23 +31,24 @@ docker compose exec -T backend python -m scripts.seed_demo
 | analyst@zhihe.demo | Zhihe2026! | analyst |
 | viewer@zhihe.demo | Zhihe2026! | viewer |
 
-Compose恰好frontend/backend/worker/db/redis五服务，全部健康检查。MySQL8、Redis7各使用命名卷，backend/worker共享JSON产物卷。backend等待数据库/Redis健康，frontend等待backend健康，worker每2秒写心跳。首次ORM metadata建表；迁移目录提供索引示例，已有表升级需审查迁移。
+Compose恰好frontend/backend/worker/db/redis五服务，全部健康检查。MySQL8、Redis7各使用命名卷，backend/worker共享JSON产物卷。backend等待数据库/Redis健康，frontend等待backend健康，worker每2秒写心跳。首次ORM metadata建表；启动时幂等补齐`specimens.roll_no`与`survival_runs.seed`两列，旧库升级后原研究（v1结果，无重抽样段）照常可查看、可导出；迁移目录另附`002_rolls.sql`供审查，已有表升级需审查迁移。
 
 ## 数据与一天的剧本
 
-来源名`zh-lightstrip-followup.csv`，固定seed73/74生成两批各180件，共360个独立试件、360条终态随访。常规/改进工艺使用不同Weibull模拟时长，观察截止在900–1450小时，按25小时离散记录；128件右删失，比例35.56%。同一时点既有失效也有删失，用于真实并列风险集演示。每件只有一条终态观察，事件定义为光通量降到试验阈值，删失为截止仍工作。仅为合成数据。
+来源名`zh-lightstrip-followup.csv`，固定seed73/74生成两批各180件，共360个试件、360条终态随访。每批15卷、每卷裁出12件，卷号形如`ZH-A-R07`；同卷试件共用卷级缺陷因子（lognormal偏移），不再假设件件独立。常规/改进工艺使用不同Weibull模拟时长，观察截止在900–1450小时，按25小时离散记录；119件右删失，比例33.06%。同一时点既有失效也有删失，用于真实并列风险集演示。每件只有一条终态观察，事件定义为光通量降到试验阈值，删失为截止仍工作。仅为合成数据。
 
 seed按用户邮箱、批次code、试件code、随访specimen_id和基准研究名查重，只补缺失，不覆盖人工备注。启动`SEED_DEMO=true`自动seed；失败记录日志不阻塞服务。预置基准比较由真实算法计算，并有获批观察说明。
 
-1. 09:00 江栩以analyst打开ZH-A和ZH-B，核对360件、小时单位及事件/删失含义。
-2. 在“试件与随访”读取终态备注，补充一条仍工作试件的观察说明。
-3. 创建“秋季两批封装耐久比较”，指定两批不同工艺、95%逐点置信水平。
-4. worker从Redis队列独立执行KM、Greenwood log-log和两组log-rank。
+1. 09:00 江栩以analyst打开ZH-A和ZH-B，核对360件、30卷、小时单位及事件/删失含义。
+2. 在“试件与随访”读取终态备注与来源卷，补充一条仍工作试件的观察说明。
+3. 创建“秋季两批封装耐久比较”，指定两批不同工艺、95%逐点置信水平与重抽样种子。
+4. worker从Redis队列独立执行KM、Greenwood log-log、整卷重抽样和两组log-rank。
 5. 阅读两条曲线、删失短线、400/800/1200h在险表和中位是否已达到。
-6. 检查并列事件表：同一时点先计全部在险，使用事件数更新，再移除该时点事件/删失。
-7. 提交尾部观察和现场应力条件复核建议，不把p值作为工艺因果结论。
-8. 阮青以admin确认或退回，并记录适用范围；重复确认409拒绝。
-9. 林舟以viewer打开确认档案、导出KM表与SHA256，不能创建或审批。
+6. 核对整卷重抽样面板：各批卷数、中位时长差区间、有效重复次数与未达到中位的重复计数。
+7. 检查并列事件表：同一时点先计全部在险，使用事件数更新，再移除该时点事件/删失。
+8. 提交尾部观察和现场应力条件复核建议，不把p值作为工艺因果结论。
+9. 阮青以admin确认或退回，并记录适用范围；重复确认409拒绝。
+10. 林舟以viewer打开确认档案、导出含卷数与区间的KM表与SHA256，不能创建或审批。
 
 ## 算法口径
 
@@ -55,15 +56,16 @@ seed按用户邮箱、批次code、试件code、随访specimen_id和基准研究
 - **Greenwood log-log区间**：累计`G=Σ d_i/[n_i(n_i-d_i)]`，在`log(-log(S))`尺度用标准正态分位数和标准误`sqrt(G)/abs(log S)`构造逐点区间，再反变换，范围保持[0,1]。S=1明确[1,1]，S=0明确[0,0]，避免边界NaN。它不是整条曲线的同时置信带。
 - **中位与在险**：仅当KM曲线首次达到≤0.5时报告对应小时；未达到为null/“尚未达到”，不拿最大时长或删失时长代替。400/800/1200h在险数为该时点之前仍在观察的试件数，观察时间正好等于时点也计入。
 - **双侧log-rank**：汇总两组所有事件时点，`E_A=d*n_A/n`，`V=d*(n_A/n)*(n_B/n)*(n-d)/(n-1)`（n≤1则V=0），`χ²=(ΣO_A-ΣE_A)²/ΣV`，自由度1，p=`erfc(sqrt(χ²/2))`。并列事件的有限总体校正保留。无事件或ΣV≈0时`estimable=false`、χ²/p=null，不给伪显著性。
-- 前提为独立试件、非信息性右删失；没有延迟入组、左/区间删失、重复事件、竞争风险或协变量调整。log-rank在比例风险差异下较敏感，交叉曲线可能检出力低；结果只作关联解释。
-- 失败态：每组少于2件、时长≤0/非有限/>1e6小时、事件非布尔、重复试件、相同批次、置信水平越界明确拒绝。全删失是合法研究：平坦曲线、中位未达到、log-rank不可估；不是失败或无限寿命证明。
-- 输入SHA256按试件code稳定排序，覆盖两组批次标识/工艺、所有试件字段、随访时长/状态/备注、置信水平、小时单位、在险时点与方法版本。保存结果含完整曲线、区间与事件风险集表，运行的参数保留在数据库。
+- **整卷重抽样（cluster bootstrap）**：同卷裁出的灯带共用缺陷，按独立试件计算会低估不确定性，因此以卷为抽样单元。每次重复对两批各自的卷有放回抽取（抽数等于该批卷数），抽中一卷保留其全部试件，重组后计算KM曲线与中位。默认2000次重复，种子随研究保存（默认20261113，可在配置页修改），同一种子重算结果逐位一致。曲线带与各组中位区间为重复样本的逐点百分位区间；两批中位时长差按`B−A`报告。中位未达到的重复单列计数（结果含重复序号清单），不混入任何区间数值；全部重复均未达到时区间为null。
+- 前提为独立卷、卷内缺陷相关、非信息性右删失；没有延迟入组、左/区间删失、重复事件、竞争风险或协变量调整。log-rank在比例风险差异下较敏感，交叉曲线可能检出力低；结果只作关联解释。
+- 失败态：每组少于2件、时长≤0/非有限/>1e6小时、事件非布尔、重复试件、相同批次、置信水平越界明确拒绝。任一试件缺卷号、或同一卷号同时出现在两批（跨批复用）时研究被拒绝（创建时422，worker兜底失败），因为整卷重抽样无法归属抽样单元。全删失是合法研究：平坦曲线、中位未达到、log-rank不可估、重抽样的中位统计全部单列；不是失败或无限寿命证明。
+- 输入SHA256按试件code稳定排序，覆盖两组批次标识/工艺、所有试件字段（含卷号）、随访时长/状态/备注、置信水平、小时单位、在险时点、重抽样种子/次数与方法版本。保存结果含完整曲线、区间、事件风险集表与整卷重抽样明细，运行的参数保留在数据库。
 
 官方参考：[SciPy ECDF与右删失KM](https://docs.scipy.org/doc/scipy-1.15.1/reference/generated/scipy.stats.ecdf.html)、[Greenwood区间](https://docs.scipy.org/doc/scipy-1.15.1/reference/generated/scipy.stats._result_classes.EmpiricalDistributionFunction.confidence_interval.html)、[log-rank口径](https://docs.scipy.org/doc/scipy-1.15.1/reference/generated/scipy.stats.logrank.html)。计算实现在本项目标准库算法中；SciPy1.15.1另作独立测试oracle，未用测试数值硬编码结果。
 
 ## 页面与工程
 
-六页为研究总览、试件与随访、比较配置、耐久结果、维护建议、研究留痕。TestCohort/Specimen/FollowupEvent/SurvivalRun/MaintenanceNote五实体贯穿模型、schema、service、route、前端API、Pinia store与页面。User/Audit为横切实体。
+六页为研究总览、试件与随访、比较配置、耐久结果、维护建议、研究留痕。TestCohort/Specimen/FollowupEvent/SurvivalRun/MaintenanceNote五实体贯穿模型、schema、service、route、前端API、Pinia store与页面；Specimen记录来源卷roll_no，SurvivalRun记录重抽样种子seed。User/Audit为横切实体。
 
 | 部分 | 技术 |
 |---|---|
@@ -103,7 +105,7 @@ docker compose down -v --remove-orphans
 
 ## 已知边界
 
-合成冻结数据，无仪器/文件上传；仅允许补随访备注，不编辑终态时长/状态。单worker无running自动恢复、事务outbox、多实例锁；中断任务需重提。登录限流仅进程内。未给中位置信区间、RMST、风险比或比例风险检验，不自动推荐更换时间。ORM metadata初建表不等于完整迁移链；字体依赖网络，离线回退。
+合成冻结数据，无仪器/文件上传；仅允许补随访备注，不编辑终态时长/状态/卷号。整卷重抽样把卷当作独立抽样单元，不建模卷内更细层级；曲线带与中位区间都是逐点百分位口径，不是同时置信带。旧数据升级后缺卷号的批次可查看但不能再创建研究，需补齐卷号。单worker无running自动恢复、事务outbox、多实例锁；中断任务需重提。登录限流仅进程内。未给中位置信区间的解析式、RMST、风险比或比例风险检验，不自动推荐更换时间。ORM metadata初建表不等于完整迁移链；字体依赖网络，离线回退。
 
 ## License
 

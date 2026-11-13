@@ -6,5 +6,6 @@ class Specimen(Base):
     id:Mapped[int]=mapped_column(primary_key=True)
     code:Mapped[str]=mapped_column(String(80),unique=True)
     cohort_id:Mapped[int]=mapped_column(ForeignKey("test_cohorts.id"))
+    roll_no:Mapped[str|None]=mapped_column(String(40),nullable=True)
     material:Mapped[str]=mapped_column(String(120))
     enrolled_at:Mapped[str]=mapped_column(String(64))

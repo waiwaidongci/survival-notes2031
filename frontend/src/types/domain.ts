@@ -1,10 +1,12 @@
 export interface User{name:string;email:string;role:string}
-export interface Cohort{id:number;code:string;name:string;process:string;description:string;specimen_count:number;events:number;censored:number}
-export interface Specimen{id:number;code:string;cohort_id:number;material:string;enrolled_at:string;followup_id:number;duration_hours:number;event_observed:boolean;note:string}
+export interface Cohort{id:number;code:string;name:string;process:string;description:string;specimen_count:number;events:number;censored:number;roll_count:number;roll_missing:number}
+export interface Specimen{id:number;code:string;cohort_id:number;roll_no:string|null;material:string;enrolled_at:string;followup_id:number;duration_hours:number;event_observed:boolean;note:string}
 export interface CurvePoint{time:number;at_risk:number;events:number;censored:number;survival:number;lower:number;upper:number;greenwood_sum:number}
 export interface GroupResult{cohort:Cohort;n:number;events:number;censored:number;curve:CurvePoint[];risk_table:{time:number;at_risk:number}[];median:number|null;median_status:string;last_observed:number;confidence:number;interval_method:string}
 export interface Logrank{estimable:boolean;chi_square:number|null;p_value:number|null;observed_a:number;expected_a:number;variance:number;reason:string;event_table:{time:number;risk_a:number;risk_b:number;events_a:number;events_b:number;expected_a:number;variance:number}[]}
-export interface Result{groups:GroupResult[];logrank:Logrank;confidence:number;time_unit:string;input_hash:string;interpretation:string;assumptions:string}
-export interface Run{id:number;name:string;cohort_a_id:number;cohort_b_id:number;confidence:number;status:string;result:Result;error:string;owner:string;created_at:string}
+export interface BootGroup{cohort_id:number;code:string;rolls:number;roll_numbers:string[];band:{time:number[];lower:number[];upper:number[]};median_interval:[number,number]|null;median_valid:number;median_not_reached:number}
+export interface Bootstrap{method:string;seed:number;replicates:number;confidence:number;groups:BootGroup[];median_difference:{order:string;valid:number;not_reached:number;not_reached_replicates:number[];interval:[number,number]|null}}
+export interface Result{groups:GroupResult[];logrank:Logrank;bootstrap?:Bootstrap;confidence:number;time_unit:string;input_hash:string;interpretation:string;assumptions:string}
+export interface Run{id:number;name:string;cohort_a_id:number;cohort_b_id:number;confidence:number;seed:number;status:string;result:Result;error:string;owner:string;created_at:string}
 export interface Note{id:number;run_id:number;title:string;interpretation:string;recommendation:string;status:string;owner:string;reviewer:string;review_note:string;created_at:string;reviewed_at:string}
 export interface Audit{id:number;actor:string;action:string;target:string;created_at:string}

@@ -3,6 +3,7 @@ class SpecimenOutput(BaseModel):
     id:int
     code:str
     cohort_id:int
+    roll_no:str|None
     material:str
     enrolled_at:str
     followup_id:int

@@ -8,3 +8,5 @@ class CohortOutput(BaseModel):
     specimen_count:int
     events:int
     censored:int
+    roll_count:int
+    roll_missing:int
